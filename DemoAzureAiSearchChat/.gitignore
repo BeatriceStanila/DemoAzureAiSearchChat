@@ -1,0 +1,11 @@
+﻿/bin/
+/obj/
+/secrets.json
+/appsettings.json
+secrets.json
+appsettings.json
+*.user
+*.suo
+*.userprefs
+*.sln.docstates
+*.userosscache
