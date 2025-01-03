@@ -33,58 +33,74 @@ class Program
 
         SearchClient searchClient = new SearchClient(new Uri(searchEndpoint), searchIndex, new AzureKeyCredential(searchKey));
 
-        // Step 4: Query Azure AI Search Service
-        Console.WriteLine("Hi there! I'm Harper Assist, please ask a question!");
-        string userQuery = Console.ReadLine();
-        SearchOptions searchOptions = new SearchOptions
+
+        Console.WriteLine("Hi there! I'm Harper Assist, ask me a question..");
+
+        var conversationHistory = new List<ChatMessage>();
+        while (true)
         {
-            IncludeTotalCount = true,
-            QueryType = SearchQueryType.Full
-        };
-        SearchResults<SearchDocument> searchResults = searchClient.Search<SearchDocument>(userQuery, searchOptions);
-
-        // Step 5: Combine search results into context and collect citations
-        var searchContent = new List<string>();
-        var citations = new List<string>();
-        int citationIndex = 1;
-
-        foreach (var result in searchResults.GetResults())
-        {
-            var content = result.Document["content"].ToString();
-            var title = result.Document.ContainsKey("title") ? result.Document["title"].ToString() : "Unknown Source";
-            var citation = $"[{citationIndex}] {title}";
-            searchContent.Add($"{content} ({citation})");
-            citations.Add(citation);
-            citationIndex++;
-        }
-        string combinedContext = string.Join("\n", searchContent);
-
-        // Step 6: Pass search results to Azure OpenAI
-        ChatCompletion completion = chatClient.CompleteChat(
-            new List<ChatMessage>()
+            Console.Write("You:");
+            string userQuery = Console.ReadLine();
+            if (userQuery.Equals("exit", StringComparison.OrdinalIgnoreCase))
             {
-                new UserChatMessage(userQuery),
-                new AssistantChatMessage($"Here is some context based on our data:\n{combinedContext}")
-            },
-            new ChatCompletionOptions
-            {
-                Temperature = (float)0.7,
-                TopP = (float)0.95,
-                FrequencyPenalty = (float)0,
-                PresencePenalty = (float)0,
-                MaxOutputTokenCount = 500,
+                Console.WriteLine("Nice chatting with you!");
+                break;
             }
-        );
-        var response = completion.Content[0].Text;
 
-        // Step 7: Add inline citations
-        var responseWithCitations = $"{response}\n\nCitations:";
-        foreach (var citation in citations)
-        {
-            responseWithCitations += $"\n{citation}";
+            conversationHistory.Add(new UserChatMessage(userQuery));
+
+            // Step 4: Query Azure AI Search Service
+            SearchOptions searchOptions = new SearchOptions
+            {
+                IncludeTotalCount = true,
+                QueryType = SearchQueryType.Full
+            };
+            SearchResults<SearchDocument> searchResults = searchClient.Search<SearchDocument>(userQuery, searchOptions);
+
+            // Step 5: Combine search results into context and collect citations
+            var searchContent = new List<string>();
+            var citations = new List<string>();
+            int citationIndex = 1;
+
+            foreach (var result in searchResults.GetResults())
+            {
+                var content = result.Document["content"].ToString();
+                var title = result.Document.ContainsKey("title") ? result.Document["title"].ToString() : "Unknown Source";
+                var citation = $"[{citationIndex}] {title}";
+                searchContent.Add($"{content} ({citation})");
+                citations.Add(citation);
+                citationIndex++;
+            }
+            string combinedContext = string.Join("\n", searchContent);
+
+            // Step 6: Pass search results to Azure OpenAI
+            ChatCompletion completion = chatClient.CompleteChat(
+                new List<ChatMessage>()
+                {
+                    new UserChatMessage(userQuery),
+                    new AssistantChatMessage($"Here is some context based on our data:\n{combinedContext}")
+                },
+                new ChatCompletionOptions
+                {
+                    Temperature = (float)0.7,
+                    TopP = (float)0.95,
+                    FrequencyPenalty = (float)0,
+                    PresencePenalty = (float)0,
+                    MaxOutputTokenCount = 500,
+                }
+            );
+            var response = completion.Content[0].Text;
+
+            // Step 7: Add inline citations
+            var responseWithCitations = $"{response}\n\nCitations:";
+            foreach (var citation in citations)
+            {
+                responseWithCitations += $"\n{citation}";
+            }
+
+            Console.WriteLine($"Harper Assist: {responseWithCitations}");
+            conversationHistory.Add(new AssistantChatMessage(response));
+            Console.WriteLine("\nAsk me another question, or type 'exit' to quit.");
         }
-
-        Console.WriteLine("Here is what I found based on your data:");
-        Console.WriteLine(responseWithCitations);
     }
 }
